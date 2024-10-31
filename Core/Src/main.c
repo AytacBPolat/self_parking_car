@@ -59,7 +59,45 @@ static void MX_TIM2_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+uint32_t measure_distance(void) {
+    // 1. Trigger the ultrasonic sensor
+    HAL_GPIO_WritePin(FRONT_TRIG_GPIO_Port, FRONT_TRIG_Pin, GPIO_PIN_SET);
+    HAL_Delay(0.01); // 10 µs pulse
+    HAL_GPIO_WritePin(FRONT_TRIG_GPIO_Port, FRONT_TRIG_Pin, GPIO_PIN_RESET);
 
+    // 2. Wait for ECHO pin to go high
+    while (HAL_GPIO_ReadPin(FRONT_ECHO_GPIO_Port, FRONT_ECHO_Pin) == GPIO_PIN_RESET);
+
+    // 3. Start the timer
+    __HAL_TIM_SET_COUNTER(&htim2, 0); // Reset counter
+    HAL_TIM_Base_Start(&htim2);
+
+    // 4. Wait for ECHO pin to go low
+    while (HAL_GPIO_ReadPin(FRONT_ECHO_GPIO_Port, FRONT_ECHO_Pin) == GPIO_PIN_SET);
+
+    // 5. Stop the timer
+    HAL_TIM_Base_Stop(&htim2);
+    uint32_t timeElapsed = __HAL_TIM_GET_COUNTER(&htim2);
+
+    // 6. Calculate distance (in cm)
+    uint32_t distance = timeElapsed / 29.1;
+
+    return distance;
+}
+
+void goForward() {
+	HAL_GPIO_WritePin(RIGHT_MOTOR_POS_GPIO_Port, RIGHT_MOTOR_POS_Pin, 1);
+	HAL_GPIO_WritePin(RIGHT_MOTOR_NEG_GPIO_Port, RIGHT_MOTOR_NEG_Pin, 0);
+	HAL_GPIO_WritePin(LEFT_MOTOR_POS_GPIO_Port, LEFT_MOTOR_POS_Pin, 1);
+	HAL_GPIO_WritePin(LEFT_MOTOR_NEG_GPIO_Port, LEFT_MOTOR_NEG_Pin, 0);
+}
+
+void goBackwards() {
+	HAL_GPIO_WritePin(RIGHT_MOTOR_POS_GPIO_Port, RIGHT_MOTOR_POS_Pin, 0);
+	HAL_GPIO_WritePin(RIGHT_MOTOR_NEG_GPIO_Port, RIGHT_MOTOR_NEG_Pin, 1);
+	HAL_GPIO_WritePin(LEFT_MOTOR_POS_GPIO_Port, LEFT_MOTOR_POS_Pin, 0);
+	HAL_GPIO_WritePin(LEFT_MOTOR_NEG_GPIO_Port, LEFT_MOTOR_NEG_Pin, 1);
+}
 /* USER CODE END 0 */
 
 /**
@@ -96,9 +134,6 @@ int main(void)
   /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
   __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 1000);
-
-  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
-  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, 1000);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -108,26 +143,11 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  goForward();
-	  HAL_Delay(1000);
-	  goBackwards();
-	  HAL_Delay(1000);
+	  uint32_t distance = measure_distance();
+	  HAL_Delay(100);
+
   }
   /* USER CODE END 3 */
-}
-
-void goForward() {
-	HAL_GPIO_WritePin(RIGHT_MOTOR_POS_GPIO_Port, RIGHT_MOTOR_POS_Pin, 1);
-	HAL_GPIO_WritePin(RIGHT_MOTOR_NEG_GPIO_Port, RIGHT_MOTOR_NEG_Pin, 0);
-	HAL_GPIO_WritePin(LEFT_MOTOR_POS_GPIO_Port, LEFT_MOTOR_POS_Pin, 1);
-	HAL_GPIO_WritePin(LEFT_MOTOR_NEG_GPIO_Port, LEFT_MOTOR_NEG_Pin, 0);
-}
-
-void goBackwards() {
-	HAL_GPIO_WritePin(RIGHT_MOTOR_POS_GPIO_Port, RIGHT_MOTOR_POS_Pin, 0);
-	HAL_GPIO_WritePin(RIGHT_MOTOR_NEG_GPIO_Port, RIGHT_MOTOR_NEG_Pin, 1);
-	HAL_GPIO_WritePin(LEFT_MOTOR_POS_GPIO_Port, LEFT_MOTOR_POS_Pin, 0);
-	HAL_GPIO_WritePin(LEFT_MOTOR_NEG_GPIO_Port, LEFT_MOTOR_NEG_Pin, 1);
 }
 
 /**
@@ -219,10 +239,6 @@ static void MX_TIM2_Init(void)
   sConfigOC.Pulse = 0;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
   if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
   {
     Error_Handler();
@@ -289,7 +305,8 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, LEFT_MOTOR_POS_Pin|LEFT_MOTOR_NEG_Pin|RIGHT_MOTOR_POS_Pin|RIGHT_MOTOR_NEG_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, FRONT_TRIG_Pin|LEFT_MOTOR_POS_Pin|LEFT_MOTOR_NEG_Pin|RIGHT_MOTOR_POS_Pin
+                          |RIGHT_MOTOR_NEG_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -304,12 +321,20 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LEFT_MOTOR_POS_Pin LEFT_MOTOR_NEG_Pin RIGHT_MOTOR_POS_Pin RIGHT_MOTOR_NEG_Pin */
-  GPIO_InitStruct.Pin = LEFT_MOTOR_POS_Pin|LEFT_MOTOR_NEG_Pin|RIGHT_MOTOR_POS_Pin|RIGHT_MOTOR_NEG_Pin;
+  /*Configure GPIO pins : FRONT_TRIG_Pin LEFT_MOTOR_POS_Pin LEFT_MOTOR_NEG_Pin RIGHT_MOTOR_POS_Pin
+                           RIGHT_MOTOR_NEG_Pin */
+  GPIO_InitStruct.Pin = FRONT_TRIG_Pin|LEFT_MOTOR_POS_Pin|LEFT_MOTOR_NEG_Pin|RIGHT_MOTOR_POS_Pin
+                          |RIGHT_MOTOR_NEG_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : FRONT_ECHO_Pin */
+  GPIO_InitStruct.Pin = FRONT_ECHO_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(FRONT_ECHO_GPIO_Port, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */

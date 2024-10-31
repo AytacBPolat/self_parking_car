@@ -67,6 +67,10 @@ void Error_Handler(void);
 #define USART_RX_GPIO_Port GPIOA
 #define LD2_Pin GPIO_PIN_5
 #define LD2_GPIO_Port GPIOA
+#define FRONT_TRIG_Pin GPIO_PIN_5
+#define FRONT_TRIG_GPIO_Port GPIOC
+#define FRONT_ECHO_Pin GPIO_PIN_6
+#define FRONT_ECHO_GPIO_Port GPIOC
 #define LEFT_MOTOR_POS_Pin GPIO_PIN_8
 #define LEFT_MOTOR_POS_GPIO_Port GPIOC
 #define LEFT_MOTOR_NEG_Pin GPIO_PIN_9
