@@ -40,7 +40,9 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim3;
 
 UART_HandleTypeDef huart2;
 
@@ -53,8 +55,10 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_TIM3_Init(void);
+static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
-
+#include <stdbool.h>
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -62,29 +66,30 @@ static void MX_TIM2_Init(void);
 uint32_t measure_distance(GPIO_TypeDef* TRIG_GPIO_Port, uint16_t TRIG_Pin, GPIO_TypeDef* ECHO_GPIO_Port, uint16_t ECHO_Pin) {
     // 1. Trigger the ultrasonic sensor
     HAL_GPIO_WritePin(TRIG_GPIO_Port, TRIG_Pin, GPIO_PIN_SET);
-    HAL_Delay(1); // 10 µs pulse
+    HAL_Delay(0.01); // 10 µs pulse
     HAL_GPIO_WritePin(TRIG_GPIO_Port, TRIG_Pin, GPIO_PIN_RESET);
 
     // 2. Wait for ECHO pin to go high
     while (HAL_GPIO_ReadPin(ECHO_GPIO_Port, ECHO_Pin) == GPIO_PIN_RESET);
 
     // 3. Start the timer
-    __HAL_TIM_SET_COUNTER(&htim2, 0); // Reset counter
-    HAL_TIM_Base_Start(&htim2);
+    __HAL_TIM_SET_COUNTER(&htim3, 0); // Reset counter
+    HAL_TIM_Base_Start(&htim3);
 
     // 4. Wait for ECHO pin to go low
     while (HAL_GPIO_ReadPin(ECHO_GPIO_Port, ECHO_Pin) == GPIO_PIN_SET);
 
     // 5. Stop the timer
-    HAL_TIM_Base_Stop(&htim2);
-    uint32_t timeElapsed = __HAL_TIM_GET_COUNTER(&htim2);
+    HAL_TIM_Base_Stop(&htim3);
+    uint32_t timeElapsed = __HAL_TIM_GET_COUNTER(&htim3);
 
     // 6. Calculate distance (in cm)
-    uint32_t distance = timeElapsed / 29.1; // Adjust divisor for your specific needs
+    uint32_t distance = timeElapsed / 58; // Adjust divisor for your specific needs
 
     return distance;
 }
 
+// CAR MOVING
 void goForward() {
 	HAL_GPIO_WritePin(RIGHT_MOTOR_POS_GPIO_Port, RIGHT_MOTOR_POS_Pin, 1);
 	HAL_GPIO_WritePin(RIGHT_MOTOR_NEG_GPIO_Port, RIGHT_MOTOR_NEG_Pin, 0);
@@ -98,6 +103,46 @@ void goBackwards() {
 	HAL_GPIO_WritePin(LEFT_MOTOR_POS_GPIO_Port, LEFT_MOTOR_POS_Pin, 0);
 	HAL_GPIO_WritePin(LEFT_MOTOR_NEG_GPIO_Port, LEFT_MOTOR_NEG_Pin, 1);
 }
+
+void turnLeft() {
+	HAL_GPIO_WritePin(RIGHT_MOTOR_POS_GPIO_Port, RIGHT_MOTOR_POS_Pin, 1);
+	HAL_GPIO_WritePin(RIGHT_MOTOR_NEG_GPIO_Port, RIGHT_MOTOR_NEG_Pin, 0);
+	HAL_GPIO_WritePin(LEFT_MOTOR_POS_GPIO_Port, LEFT_MOTOR_POS_Pin, 0);
+	HAL_GPIO_WritePin(LEFT_MOTOR_NEG_GPIO_Port, LEFT_MOTOR_NEG_Pin, 1);
+}
+
+void turnRight() {
+	HAL_GPIO_WritePin(RIGHT_MOTOR_POS_GPIO_Port, RIGHT_MOTOR_POS_Pin, 0);
+	HAL_GPIO_WritePin(RIGHT_MOTOR_NEG_GPIO_Port, RIGHT_MOTOR_NEG_Pin, 1);
+	HAL_GPIO_WritePin(LEFT_MOTOR_POS_GPIO_Port, LEFT_MOTOR_POS_Pin, 1);
+	HAL_GPIO_WritePin(LEFT_MOTOR_NEG_GPIO_Port, LEFT_MOTOR_NEG_Pin, 0);
+}
+
+void stop() {
+	HAL_GPIO_WritePin(RIGHT_MOTOR_POS_GPIO_Port, RIGHT_MOTOR_POS_Pin, 0);
+	HAL_GPIO_WritePin(RIGHT_MOTOR_NEG_GPIO_Port, RIGHT_MOTOR_NEG_Pin, 0);
+	HAL_GPIO_WritePin(LEFT_MOTOR_POS_GPIO_Port, LEFT_MOTOR_POS_Pin, 0);
+	HAL_GPIO_WritePin(LEFT_MOTOR_NEG_GPIO_Port, LEFT_MOTOR_NEG_Pin, 0);
+}
+
+// STOP WATCH
+void stopwatch_start(void) {
+    HAL_TIM_Base_Start(&htim1);
+}
+
+uint32_t stopwatch_stop(void) {
+	uint32_t timeElapsed = __HAL_TIM_GET_COUNTER(&htim2);
+    HAL_TIM_Base_Stop(&htim1);
+    return timeElapsed;
+}
+
+void stopwatch_reset(void) {
+    __HAL_TIM_SET_COUNTER(&htim1, 0);
+}
+
+uint32_t stopwatch_read(void) {
+	return __HAL_TIM_GET_COUNTER(&htim1);
+}
 /* USER CODE END 0 */
 
 /**
@@ -108,7 +153,13 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+	bool isParkDone = false;
+	bool isParking = false;
+	bool isDetectParkingSpot = false;
+	bool isParkingSpotDetectStopWatchStarted = false;
+	bool isParkingStopWatchStarted = false;
+	bool isCarAligned = false;
+	bool isCarTurnLeftStopWatchStarted = false;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -131,9 +182,19 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   MX_TIM2_Init();
+  MX_TIM3_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
   __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 1000);
+
+  uint32_t sideDistanceReference = measure_distance(SIDE_TRIG_GPIO_Port, SIDE_TRIG_Pin, SIDE_ECHO_GPIO_Port, SIDE_ECHO_Pin);
+  uint32_t parkingSpotWallDist = 0;
+
+  uint32_t timeDistance = 0;
+
+  stopwatch_start();
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -143,12 +204,60 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  uint32_t leftSideDist = measure_distance(LEFT_SIDE_TRIG_GPIO_Port, LEFT_SIDE_TRIG_Pin, LEFT_SIDE_ECHO_GPIO_Port, LEFT_SIDE_ECHO_Pin);
-	  uint32_t frontDist = measure_distance(FRONT_TRIG_GPIO_Port, FRONT_TRIG_Pin, FRONT_ECHO_GPIO_Port, FRONT_ECHO_Pin);
-	  uint32_t rightSideDist = measure_distance(RIGHT_SIDE_TRIG_GPIO_Port, RIGHT_SIDE_TRIG_Pin, RIGHT_SIDE_ECHO_GPIO_Port, RIGHT_SIDE_ECHO_Pin);
-	  uint32_t backSideDist = measure_distance(BACK_SIDE_TRIG_GPIO_Port, BACK_SIDE_TRIG_Pin, BACK_SIDE_ECHO_GPIO_Port, BACK_SIDE_ECHO_Pin);
-	  HAL_Delay(100);
+	  if (!isParkDone) {
+		  if (!isParking) {
+			  goForward();
+			  //uint32_t frontDist = measure_distance(FRONT_TRIG_GPIO_Port, FRONT_TRIG_Pin, FRONT_ECHO_GPIO_Port, FRONT_ECHO_Pin);
+			  uint32_t sideDist = measure_distance(SIDE_TRIG_GPIO_Port, SIDE_TRIG_Pin, SIDE_ECHO_GPIO_Port, SIDE_ECHO_Pin);
 
+			  // calculate gap
+			  int32_t sideDistanceGap = sideDist - sideDistanceReference;
+
+			  // check is there enough gap for parking
+			  if (sideDistanceGap >= 10 && !isDetectParkingSpot) {
+				isDetectParkingSpot = true;
+				stopwatch_start();
+			  }
+
+			  if (isDetectParkingSpot) {
+				  uint32_t time = stopwatch_read();
+				  if (time >= 999) {
+					  stop();
+					  timeDistance = time;
+					  isParking = true;
+					  stopwatch_reset();
+				  }
+			  }
+		  }
+		  else {
+			  /*
+			  if (!isParkingStopWatchStarted) {
+				  stopwatch_start();
+				  isParkingStopWatchStarted = true;
+			  }
+			  if (!isCarAligned) {
+				  goBackwards();
+				  uint32_t time = stopwatch_read();
+				  if (time >= timeDistance / 2) {
+					  stopwatch_stop();
+					  stopwatch_reset();
+					  isCarAligned = true;
+				  }
+			  }
+			  else if (isCarAligned) {
+				  if (!isCarTurnLeftStopWatchStarted) {
+					  stopwatch_start();
+					  isCarTurnLeftStopWatchStarted = true;
+				  }
+				  uint32_t time = stopwatch_read();
+				  turnLeft();
+				  if (time >= 250) {
+					  stop();
+				  }
+			  }
+			  */
+		  }
+	  }
   }
   /* USER CODE END 3 */
 }
@@ -166,9 +275,12 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI48;
-  RCC_OscInitStruct.HSI48State = RCC_HSI48_ON;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL12;
+  RCC_OscInitStruct.PLL.PREDIV = RCC_PREDIV_DIV2;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -178,7 +290,7 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI48;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
 
@@ -192,6 +304,52 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief TIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM1_Init(void)
+{
+
+  /* USER CODE BEGIN TIM1_Init 0 */
+
+  /* USER CODE END TIM1_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM1_Init 1 */
+
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 48000-1;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 1000-1;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
+
+  /* USER CODE END TIM1_Init 2 */
+
 }
 
 /**
@@ -214,7 +372,7 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 84-1;
+  htim2.Init.Prescaler = 48-1;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim2.Init.Period = 1000-1;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -250,6 +408,51 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 2 */
   HAL_TIM_MspPostInit(&htim2);
+
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 48-1;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 1000-1;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
 
 }
 
@@ -303,17 +506,13 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, LEFT_SIDE_TRIG_Pin|FRONT_TRIG_Pin|LEFT_MOTOR_POS_Pin|LEFT_MOTOR_NEG_Pin
+  HAL_GPIO_WritePin(GPIOC, SIDE_TRIG_Pin|FRONT_TRIG_Pin|LEFT_MOTOR_POS_Pin|LEFT_MOTOR_NEG_Pin
                           |RIGHT_MOTOR_POS_Pin|RIGHT_MOTOR_NEG_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, BACK_SIDE_TRIG_Pin|RIGHT_SIDE_TRIG_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -321,17 +520,17 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LEFT_SIDE_TRIG_Pin FRONT_TRIG_Pin LEFT_MOTOR_POS_Pin LEFT_MOTOR_NEG_Pin
+  /*Configure GPIO pins : SIDE_TRIG_Pin FRONT_TRIG_Pin LEFT_MOTOR_POS_Pin LEFT_MOTOR_NEG_Pin
                            RIGHT_MOTOR_POS_Pin RIGHT_MOTOR_NEG_Pin */
-  GPIO_InitStruct.Pin = LEFT_SIDE_TRIG_Pin|FRONT_TRIG_Pin|LEFT_MOTOR_POS_Pin|LEFT_MOTOR_NEG_Pin
+  GPIO_InitStruct.Pin = SIDE_TRIG_Pin|FRONT_TRIG_Pin|LEFT_MOTOR_POS_Pin|LEFT_MOTOR_NEG_Pin
                           |RIGHT_MOTOR_POS_Pin|RIGHT_MOTOR_NEG_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LEFT_SIDE_ECHO_Pin FRONT_ECHO_Pin */
-  GPIO_InitStruct.Pin = LEFT_SIDE_ECHO_Pin|FRONT_ECHO_Pin;
+  /*Configure GPIO pins : SIDE_ECHO_Pin FRONT_ECHO_Pin */
+  GPIO_InitStruct.Pin = SIDE_ECHO_Pin|FRONT_ECHO_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
@@ -342,19 +541,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : BACK_SIDE_TRIG_Pin RIGHT_SIDE_TRIG_Pin */
-  GPIO_InitStruct.Pin = BACK_SIDE_TRIG_Pin|RIGHT_SIDE_TRIG_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : BACK_SIDE_ECHO_Pin RIGHT_SIDE_ECHO_Pin */
-  GPIO_InitStruct.Pin = BACK_SIDE_ECHO_Pin|RIGHT_SIDE_ECHO_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
