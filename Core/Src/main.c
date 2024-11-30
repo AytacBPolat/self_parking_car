@@ -45,7 +45,6 @@ TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 
 UART_HandleTypeDef huart2;
-
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -63,38 +62,42 @@ static void MX_TIM1_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-uint32_t measure_distance(GPIO_TypeDef* TRIG_GPIO_Port, uint16_t TRIG_Pin, GPIO_TypeDef* ECHO_GPIO_Port, uint16_t ECHO_Pin) {
-    // 1. Trigger the ultrasonic sensor
-    HAL_GPIO_WritePin(TRIG_GPIO_Port, TRIG_Pin, GPIO_PIN_SET);
-    HAL_Delay(0.01); // 10 µs pulse
-    HAL_GPIO_WritePin(TRIG_GPIO_Port, TRIG_Pin, GPIO_PIN_RESET);
+uint32_t myTime = 0;
+bool isTimerActive = false;
 
-    // 2. Wait for ECHO pin to go high
-    while (HAL_GPIO_ReadPin(ECHO_GPIO_Port, ECHO_Pin) == GPIO_PIN_RESET);
+uint16_t measure_distance(GPIO_TypeDef* TRIG_GPIO_Port, uint16_t TRIG_Pin, GPIO_TypeDef* ECHO_GPIO_Port, uint16_t ECHO_Pin) {
+	uint32_t pMillis;
+	uint32_t value1 = 0;
+	uint32_t value2 = 0;
+	uint16_t distance  = 0; //cm
 
-    // 3. Start the timer
-    __HAL_TIM_SET_COUNTER(&htim3, 0); // Reset counter
-    HAL_TIM_Base_Start(&htim3);
+	HAL_GPIO_WritePin(TRIG_GPIO_Port, TRIG_Pin, GPIO_PIN_SET);  // pull the TRIG pin HIGH
+	__HAL_TIM_SET_COUNTER(&htim1, 0);
+	while (__HAL_TIM_GET_COUNTER (&htim1) < 10);  // wait for 10 us
+	HAL_GPIO_WritePin(TRIG_GPIO_Port, TRIG_Pin, GPIO_PIN_RESET);  // pull the TRIG pin low
 
-    // 4. Wait for ECHO pin to go low
-    while (HAL_GPIO_ReadPin(ECHO_GPIO_Port, ECHO_Pin) == GPIO_PIN_SET);
+	pMillis = HAL_GetTick(); // used this to avoid infinite while loop  (for timeout)
+	// wait for the echo pin to go high
+	while (!(HAL_GPIO_ReadPin (ECHO_GPIO_Port, ECHO_Pin)) && pMillis + 10 >  HAL_GetTick());
+	value1 = __HAL_TIM_GET_COUNTER (&htim1);
 
-    // 5. Stop the timer
-    HAL_TIM_Base_Stop(&htim3);
-    uint32_t timeElapsed = __HAL_TIM_GET_COUNTER(&htim3);
+	pMillis = HAL_GetTick(); // used this to avoid infinite while loop (for timeout)
+	// wait for the echo pin to go low
+	while ((HAL_GPIO_ReadPin (ECHO_GPIO_Port, ECHO_Pin)) && pMillis + 50 > HAL_GetTick());
+	value2 = __HAL_TIM_GET_COUNTER (&htim1);
 
-    // 6. Calculate distance (in cm)
-    uint32_t distance = timeElapsed / 58; // Adjust divisor for your specific needs
+	distance = (value2-value1)* 0.034/2;
+	HAL_Delay(50);
 
-    return distance;
+	return distance;
 }
 
 // CAR MOVING
 void goForward() {
 	HAL_GPIO_WritePin(RIGHT_MOTOR_POS_GPIO_Port, RIGHT_MOTOR_POS_Pin, 1);
 	HAL_GPIO_WritePin(RIGHT_MOTOR_NEG_GPIO_Port, RIGHT_MOTOR_NEG_Pin, 0);
-	HAL_GPIO_WritePin(LEFT_MOTOR_POS_GPIO_Port, LEFT_MOTOR_POS_Pin, 1);
-	HAL_GPIO_WritePin(LEFT_MOTOR_NEG_GPIO_Port, LEFT_MOTOR_NEG_Pin, 0);
+	//HAL_GPIO_WritePin(LEFT_MOTOR_POS_GPIO_Port, LEFT_MOTOR_POS_Pin, 1);
+	//HAL_GPIO_WritePin(LEFT_MOTOR_NEG_GPIO_Port, LEFT_MOTOR_NEG_Pin, 0);
 }
 
 void goBackwards() {
@@ -121,28 +124,42 @@ void turnRight() {
 void stop() {
 	HAL_GPIO_WritePin(RIGHT_MOTOR_POS_GPIO_Port, RIGHT_MOTOR_POS_Pin, 0);
 	HAL_GPIO_WritePin(RIGHT_MOTOR_NEG_GPIO_Port, RIGHT_MOTOR_NEG_Pin, 0);
-	HAL_GPIO_WritePin(LEFT_MOTOR_POS_GPIO_Port, LEFT_MOTOR_POS_Pin, 0);
-	HAL_GPIO_WritePin(LEFT_MOTOR_NEG_GPIO_Port, LEFT_MOTOR_NEG_Pin, 0);
+	//HAL_GPIO_WritePin(LEFT_MOTOR_POS_GPIO_Port, LEFT_MOTOR_POS_Pin, 0);
+	//HAL_GPIO_WritePin(LEFT_MOTOR_NEG_GPIO_Port, LEFT_MOTOR_NEG_Pin, 0);
 }
 
+void reset_time() {
+	myTime = 0;
+}
+
+void start_timer() {
+	isTimerActive = true;
+}
+
+void stop_timer() {
+	isTimerActive = false;
+}
+
+/*
 // STOP WATCH
 void stopwatch_start(void) {
-    HAL_TIM_Base_Start(&htim1);
+    HAL_TIM_Base_Start(&htim2);
 }
 
 uint32_t stopwatch_stop(void) {
 	uint32_t timeElapsed = __HAL_TIM_GET_COUNTER(&htim2);
-    HAL_TIM_Base_Stop(&htim1);
+    HAL_TIM_Base_Stop(&htim2);
     return timeElapsed;
 }
 
 void stopwatch_reset(void) {
-    __HAL_TIM_SET_COUNTER(&htim1, 0);
+    __HAL_TIM_SET_COUNTER(&htim2, 0);
 }
 
 uint32_t stopwatch_read(void) {
-	return __HAL_TIM_GET_COUNTER(&htim1);
+	return __HAL_TIM_GET_COUNTER(&htim2);
 }
+*/
 /* USER CODE END 0 */
 
 /**
@@ -153,13 +170,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-	bool isParkDone = false;
-	bool isParking = false;
-	bool isDetectParkingSpot = false;
-	bool isParkingSpotDetectStopWatchStarted = false;
-	bool isParkingStopWatchStarted = false;
-	bool isCarAligned = false;
-	bool isCarTurnLeftStopWatchStarted = false;
+
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -185,15 +196,25 @@ int main(void)
   MX_TIM3_Init();
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
-  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 1000);
+  //HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
+  //__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 1000);
+  HAL_TIM_Base_Start_IT(&htim3);
 
-  uint32_t sideDistanceReference = measure_distance(SIDE_TRIG_GPIO_Port, SIDE_TRIG_Pin, SIDE_ECHO_GPIO_Port, SIDE_ECHO_Pin);
-  uint32_t parkingSpotWallDist = 0;
+  HAL_TIM_Base_Start(&htim1);
+  HAL_GPIO_WritePin(SIDE_TRIG_GPIO_Port, SIDE_TRIG_Pin, GPIO_PIN_RESET);  // pull the TRIG pin low
+
+  uint16_t sideDistanceReference = measure_distance(SIDE_TRIG_GPIO_Port, SIDE_TRIG_Pin, SIDE_ECHO_GPIO_Port, SIDE_ECHO_Pin);
+  uint16_t parkingSpotWallDist = 0;
 
   uint32_t timeDistance = 0;
 
-  stopwatch_start();
+  bool isParkDone = false;
+  bool isParking = false;
+  bool isDetectParkingSpot = false;
+  bool isParkingSpotDetectStopWatchStarted = false;
+  bool isParkingStopWatchStarted = false;
+  bool isCarAligned = false;
+  bool isCarTurnLeftStopWatchStarted = false;
 
   /* USER CODE END 2 */
 
@@ -204,32 +225,46 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
 	  if (!isParkDone) {
 		  if (!isParking) {
 			  goForward();
-			  //uint32_t frontDist = measure_distance(FRONT_TRIG_GPIO_Port, FRONT_TRIG_Pin, FRONT_ECHO_GPIO_Port, FRONT_ECHO_Pin);
-			  uint32_t sideDist = measure_distance(SIDE_TRIG_GPIO_Port, SIDE_TRIG_Pin, SIDE_ECHO_GPIO_Port, SIDE_ECHO_Pin);
+			  //uint16_t frontDist = measure_distance(FRONT_TRIG_GPIO_Port, FRONT_TRIG_Pin, FRONT_ECHO_GPIO_Port, FRONT_ECHO_Pin);
+			  uint16_t sideDist = measure_distance(SIDE_TRIG_GPIO_Port, SIDE_TRIG_Pin, SIDE_ECHO_GPIO_Port, SIDE_ECHO_Pin);
 
 			  // calculate gap
-			  int32_t sideDistanceGap = sideDist - sideDistanceReference;
+			  uint16_t sideDistanceGap = sideDist - sideDistanceReference;
 
 			  // check is there enough gap for parking
-			  if (sideDistanceGap >= 10 && !isDetectParkingSpot) {
-				isDetectParkingSpot = true;
-				stopwatch_start();
+			  if (sideDistanceGap >= 10 && sideDistanceGap < 10000 && !isDetectParkingSpot) {
+				  isDetectParkingSpot = true;
+				  start_timer();
 			  }
 
 			  if (isDetectParkingSpot) {
-				  uint32_t time = stopwatch_read();
-				  if (time >= 999) {
-					  stop();
-					  timeDistance = time;
-					  isParking = true;
-					  stopwatch_reset();
+				  if (sideDistanceGap <= 4 || sideDistanceGap >= 65530) {
+					  stop_timer();
+					  if (myTime >= 1500) {
+						  stop();
+						  timeDistance = myTime;
+						  isParking = true;
+					  }
+					  else {
+						  isDetectParkingSpot = false;
+					  }
+					  reset_time();
 				  }
 			  }
 		  }
 		  else {
+			  start_timer();
+			  goBackwards();
+			  if (myTime >= timeDistance / 2) {
+				  stop();
+				  stop_timer();
+				  reset_time();
+				  isParkDone = true;
+			  }
 			  /*
 			  if (!isParkingStopWatchStarted) {
 				  stopwatch_start();
@@ -256,6 +291,7 @@ int main(void)
 				  }
 			  }
 			  */
+
 		  }
 	  }
   }
@@ -325,9 +361,9 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 48000-1;
+  htim1.Init.Prescaler = 47;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 1000-1;
+  htim1.Init.Period = 65535;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -547,6 +583,11 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+    if (htim->Instance == TIM3 && isTimerActive) {
+    	myTime++;
+    }
+}
 
 /* USER CODE END 4 */
 
