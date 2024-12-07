@@ -59,34 +59,30 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define B1_Pin GPIO_PIN_13
-#define B1_GPIO_Port GPIOC
 #define SIDE_TRIG_Pin GPIO_PIN_2
 #define SIDE_TRIG_GPIO_Port GPIOC
 #define SIDE_ECHO_Pin GPIO_PIN_3
 #define SIDE_ECHO_GPIO_Port GPIOC
-#define USART_TX_Pin GPIO_PIN_2
-#define USART_TX_GPIO_Port GPIOA
 #define USART_RX_Pin GPIO_PIN_3
 #define USART_RX_GPIO_Port GPIOA
 #define LD2_Pin GPIO_PIN_5
 #define LD2_GPIO_Port GPIOA
-#define FRONT_ECHO_Pin GPIO_PIN_5
-#define FRONT_ECHO_GPIO_Port GPIOC
-#define FRONT_TRIG_Pin GPIO_PIN_6
-#define FRONT_TRIG_GPIO_Port GPIOC
-#define LEFT_MOTOR_POS_Pin GPIO_PIN_8
-#define LEFT_MOTOR_POS_GPIO_Port GPIOC
-#define LEFT_MOTOR_NEG_Pin GPIO_PIN_9
+#define RIGHT_MOTOR_POS_Pin GPIO_PIN_5
+#define RIGHT_MOTOR_POS_GPIO_Port GPIOC
+#define RIGHT_MOTOR_NEG_Pin GPIO_PIN_6
+#define RIGHT_MOTOR_NEG_GPIO_Port GPIOC
+#define LEFT_MOTOR_NEG_Pin GPIO_PIN_8
 #define LEFT_MOTOR_NEG_GPIO_Port GPIOC
+#define LEFT_MOTOR_POS_Pin GPIO_PIN_9
+#define LEFT_MOTOR_POS_GPIO_Port GPIOC
 #define TMS_Pin GPIO_PIN_13
 #define TMS_GPIO_Port GPIOA
 #define TCK_Pin GPIO_PIN_14
 #define TCK_GPIO_Port GPIOA
-#define RIGHT_MOTOR_POS_Pin GPIO_PIN_10
-#define RIGHT_MOTOR_POS_GPIO_Port GPIOC
-#define RIGHT_MOTOR_NEG_Pin GPIO_PIN_11
-#define RIGHT_MOTOR_NEG_GPIO_Port GPIOC
+#define FRONT_ECHO_Pin GPIO_PIN_10
+#define FRONT_ECHO_GPIO_Port GPIOC
+#define FRONT_TRIG_Pin GPIO_PIN_11
+#define FRONT_TRIG_GPIO_Port GPIOC
 
 /* USER CODE BEGIN Private defines */
 
