@@ -197,7 +197,7 @@ int main(void)
   bool isCarAlignStarted = false;
   bool isCarAligned = false;
 
-  uint32_t carRotateTime = 688;
+  uint32_t carRotateTime = 250;
 
   /* USER CODE END 2 */
 
@@ -226,7 +226,7 @@ int main(void)
 					  stop_timer();
 					  if (myTime >= 300) {
 						  stop();
-						  timeDistance = myTime;
+						  timeDistance = myTime * 0.75;
 						  isParking = true;
 						  HAL_Delay(1000);
 						  reset_time();
@@ -272,7 +272,7 @@ int main(void)
 
 				  uint16_t frontDist = measure_distance(FRONT_TRIG_GPIO_Port, FRONT_TRIG_Pin, FRONT_ECHO_GPIO_Port, FRONT_ECHO_Pin, htim1);
 
-				  if (frontDist <= 5) {
+				  if (frontDist <= 10) {
 					  isCarAligned = true;
 					  isCarAlignStarted = false;
 					  stop();
@@ -287,7 +287,7 @@ int main(void)
 			  }
 			  if (isStartTurningRight && !isFinishTurningRight) {
 				  turnRight();
-				  if (myTime >= carRotateTime * 0.7) {
+				  if (myTime >= carRotateTime  * 1.4 ) {
 					  isStartTurningRight = false;
 					  isFinishTurningRight = true;
 					  stop();
